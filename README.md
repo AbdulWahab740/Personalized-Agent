@@ -69,11 +69,13 @@ User Input → FastAPI → Main Agent → Tools
                                 ↳ Post Analytics Agent
                                 ↳ Email Agent (draft + send)
 `
-▶️ Run Locally
-1️⃣ Clone the repository
-git clone https://github.com/your-username/personal-agent.git
+▶️ Run Locally 
+  
+1️⃣ Clone the repository  
+`
+git clone https://github.com/AbdulWahab740/personal-agent.git
 cd personal-agent
-
+`
 2️⃣ Install dependencies
 pip install -r requirements.txt
 
