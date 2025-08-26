@@ -51,7 +51,7 @@ It uses LangChain, LangGraph, FastAPI, and Streamlit to provide an interactive a
 
   
 # ⚙️ Tech Stack
-`
+```
 Python
 LangChain → for LLM-driven tools & agents
 LangGraph → for stateful workflows & human-in-the-loop approvals
@@ -59,7 +59,7 @@ FastAPI → backend API for agent orchestration
 Streamlit → frontend for user interaction
 Google Gmail API → send emails directly via Gmail
 Qdrant → memory/personalized info preservation
-`
+```
 
 # 🏗️ Architecture
 `
