@@ -62,22 +62,23 @@ Qdrant → memory/personalized info preservation
 ```
 
 # 🏗️ Architecture
-`
+```
 User Input → FastAPI → Main Agent → Tools
                                 ↳ LinkedIn Post Agent
                                 ↳ Profile Analytics Agent
                                 ↳ Post Analytics Agent
                                 ↳ Email Agent (draft + send)
-`
+```
+
 ▶️ Run Locally 
   
 1️⃣ Clone the repository  
-`
+```
 git clone https://github.com/AbdulWahab740/personal-agent.git
 cd personal-agent
-`
-2️⃣ Install dependencies
-pip install -r requirements.txt
+```  
+2️⃣ Install dependencies  
+```pip install -r requirements.txt```
 
 3️⃣ Setup Gmail and Calender API and GROQ API
 
@@ -91,10 +92,10 @@ On first run, you’ll authenticate and generate gmailtoken.json.
 Visit Grok website for the api!
 
 4️⃣ Run FastAPI backend
-uvicorn app:app --reload
+```uvicorn app:app --reload ```
 
 5️⃣ Run Streamlit frontend
-streamlit run frontend.py
+```streamlit run frontend.py```
 
 # 💡 Usage
 
