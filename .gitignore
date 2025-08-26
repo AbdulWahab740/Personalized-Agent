@@ -10,3 +10,4 @@ profile_data.json
 personal_env/
 automation/credentials.json
 automation/token.json
+webcredentials.json
