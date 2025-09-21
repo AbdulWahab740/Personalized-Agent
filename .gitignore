@@ -11,3 +11,5 @@ personal_env/
 automation/credentials.json
 automation/token.json
 webcredentials.json
+credentialsss.json
+test.py
