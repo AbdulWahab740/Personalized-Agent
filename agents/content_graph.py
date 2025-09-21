@@ -2,7 +2,8 @@ from langgraph.graph import StateGraph, END
 from typing import TypedDict, Optional
 from agents.linkedinContentGen import setup_llm, PersonalizedLinkedInContentAgent
 
-content_agent = PersonalizedLinkedInContentAgent()
+llm = setup_llm()
+content_agent = PersonalizedLinkedInContentAgent(llm)
 
 class ContentState(TypedDict):
     query: str

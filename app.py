@@ -45,7 +45,7 @@ async def get_linkedin_post(req: QueryRequest):
         elif "compound" == query["route"]:
             print("Got compound query: ", query)
             return {"message": query, "status": "compound_completed"}
-        print(f"DEBUG RESULT: {query}")  
+        # print(f"DEBUG RESULT: {query}")  
         return {"message": query}        
     except Exception as e:
         import traceback
@@ -56,6 +56,7 @@ async def get_linkedin_post(req: QueryRequest):
 
 @app.post("/send_email")
 def send_email(req: dict):
+    print("Got the request: ", req)
     draft = req.get("draft")
     if not draft:
         return {"output": {"success": False, "error": "Draft missing"}}

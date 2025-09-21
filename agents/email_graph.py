@@ -32,7 +32,13 @@ def send_node(state: EmailState) -> EmailState:
         "query": state["query"],
         "draft": draft,
         "approved": True,
-        "output": res
+        "output": {
+            "success": res.get("success", False),
+            "message": "Email sent successfully" if res.get("success") else res.get("error", "Failed to send email"),
+            "to": draft["to"],
+            "subject": draft.get("subject", "No Subject"),
+            "body": draft.get("body", "")
+        }
     }
 
 graph.add_node("draft", draft_node)

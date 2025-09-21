@@ -2,7 +2,6 @@ from langgraph.graph import StateGraph, END
 from typing import TypedDict, Optional
 from agents.linkedinAnalyticsGraph import profile_analytics_agent
 from agents.linkedinAnalytics import analyze_post_agent
-from tools.content_postingTool import content_posting_agent
 from agents.email_graph import graph as email_graph
 from agents.calender_graph import calender_graph
 from agents.linkedinContentGen import setup_llm
@@ -34,36 +33,48 @@ Available agents:
 User query: "{state['query']}"
 
 Routing guidance and examples:
-- If the user asks for "best performing post", "top post(s)", "top performing", or similar analytics insights, choose profile_analytics (these rely on uploaded Excel/CSV analytics files).
-- If the user provides a LinkedIn post URL or asks to analyze a specific URL, choose post_analytics.
+- If the user just ask to mail to someone mail, choose `email`.
+- If the user just ask to write content for linkedin, choose `linkedin_post`.
+- If the user just ask to create event on google calendar, choose `calender`.
+- If the user just ask to analyze any profile number to analyze its url, choose `profile_analytics`.
+- If the user asks for "best performing post", "top post(s)", "top performing", or similar analytics insights, choose `profile_analytics` (these rely on uploaded Excel/CSV analytics files).
+- If the user provides a LinkedIn post URL or asks to analyze a specific URL, choose `post_analytics`.
 - If the query involves multiple actions (like creating calendar event AND sending email), respond with "compound".
-Otherwise, respond with ONLY the single agent name (linkedin_post, profile_analytics, post_analytics, email, or calender).
+
+Make sure to respond with ONLY the single agent name (linkedin_post, profile_analytics, post_analytics, email, or calender) and that should be correct for the query!
 """
     
     response = llm.invoke(prompt)
     choice = response.content.strip().lower() if hasattr(response, 'content') else str(response).strip().lower()
-    
+    print("Choice: ", choice)
     # Validate the choice
     valid_choices = ["linkedin_post", "profile_analytics", "post_analytics", "email", "calender", "compound"]
     if choice not in valid_choices:
         # Fallback to keyword matching if LLM gives invalid response
         q = state["query"].lower()
-        # Check for compound requests first
-        if ("calender" in q or "event" in q) and ("email" in q or "mail" in q):
-            choice = "compound"
-        elif "linkedin post" in q or "create post" in q:
+        
+        # Check for email-related queries first
+        if "email" in q or "mail" in q or "e-mail" in q:
+            # Check if it's a compound request with calendar
+            if "calender" in q or "event" in q or "schedule" in q:
+                choice = "compound"
+            else:
+                choice = "email"
+        # Then check for calendar events
+        elif "calender" in q or "event" in q or "schedule" in q:
+            choice = "calender"
+        # Then check for LinkedIn posts
+        elif "linkedin post" in q or "create post" in q or "write a post" in q:
             choice = "linkedin_post"
+        # Then check for analytics
         elif (
             "profile analytics" in q or "excel" in q or "sheet" in q or
-            "best performing" in q or "top post" in q or "top posts" in q or "top-performing" in q or "best post" in q
+            "best performing" in q or "top post" in q or "top posts" in q or 
+            "top-performing" in q or "best post" in q
         ):
             choice = "profile_analytics"
-        elif "analyze post" in q or "url" in q:
+        elif "analyze post" in q or "url" in q or "post analysis" in q:
             choice = "post_analytics"
-        elif "email" in q or "send mail" in q:
-            choice = "email"
-        elif "calender" in q or "event" in q:
-            choice = "calender"
         else:
             choice = "linkedin_post"  # default fallback
     
@@ -156,36 +167,29 @@ def compound_agent(state: AgentState) -> AgentState:
         start_info = event_info.get('start', {}) if event_info else {}
         start_time = start_info.get('dateTime', 'TBD') if isinstance(start_info, dict) else 'TBD'
         
-        email_query = f"Send an email about the calendar event: {summary} scheduled for {start_time}"
-        
         email_state = {
-            "query": email_query,
+            "query": query,
             "draft": None,
             "approved": False,
             "output": None
         }
         
-        # Generate email draft
-        email_comp = email_graph.compile()
-        email_draft_result = email_comp.invoke(email_state, start_at="draft")
-        
-        # Auto-approve and send the email with null checks
-        if email_draft_result and email_draft_result.get("draft"):
-            email_send_state = {
-                "query": email_query,
-                "draft": email_draft_result["draft"],
-                "approved": True,
-                "output": None
-            }
-            email_result = email_comp.invoke(email_send_state, start_at="send")
-            results["email"] = email_result
-        else:
-            results["email"] = {"output": {"success": False, "error": "Failed to generate email draft"}}
-        
-        return {"output": results, "route": "compound"}
+        # Generate and send email
+        try:
+            email_comp = email_graph.compile()
+            
+            # Generate draft
+            email_draft_result = email_comp.invoke(email_state, start_at="draft")
+            # Return the draft for review (not automatically sending)
+            results["draft"] = email_draft_result["draft"]
+            results["status"] = "draft_generated"
+            print("Result: ", results)
+        except Exception as e:
+            results["status"] = "draft_generated"
+            results["error"] = f"Failed to send email: {str(e)}"
     
     # Fallback for other compound requests
-    return {"output": {"error": "Compound request not recognized"}, "route": "compound"}
+    return {"output": results, "route": "compound"}
 
 # Add nodes
 maingraph.add_node("linkedin_post", linkedin_post_agent)

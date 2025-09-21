@@ -6,7 +6,7 @@ from langchain.prompts import PromptTemplate
 from typing import Dict, Any
 import streamlit as st
 
-from schemas import PostAnalysisInput, ProfileAnalysisInput, CreatePostInput
+from utils.schemas import PostAnalysisInput, ProfileAnalysisInput, CreatePostInput
 from agents.linkedinContentGen import setup_llm
 from tools.post_analyticsTool import get_linkedin_post
 from tools.profile_analyticsTools import (
@@ -92,8 +92,15 @@ User request:
         )
 
         agent = create_tool_calling_agent(llm, subtools, prompt=prompt)
-        exec_ = AgentExecutor(agent=agent, tools=subtools, verbose=True, handle_parsing_errors=True)
-        return exec_.invoke({"input": question or "Give me a strategy from the analytics."})
+        exec_ = AgentExecutor(agent=agent, tools=subtools, verbose=False, handle_parsing_errors=True)
+        result = exec_.invoke({"input": question or "Give me a strategy from the analytics."})
+        # If result contains an 'output' field (typical), use that
+        if isinstance(result, dict) and "output" in result:
+            final_text = result["output"]
+        else:
+            final_text = str(result)
+
+        return {"success": True, "analysis": final_text}
 
     except Exception as e:
         return {"success": False, "error": f"Profile analysis failed: {e}"}
@@ -144,11 +151,17 @@ End with a crisp 2-3 line summary strategy.
         )
 
         agent = create_tool_calling_agent(llm, subtools, prompt=prompt)
-        exec_ = AgentExecutor(agent=agent, tools=subtools, verbose=True, handle_parsing_errors=True)
+        exec_ = AgentExecutor(agent=agent, tools=subtools, verbose=False, handle_parsing_errors=True)
 
         # Run the agent
         result = exec_.invoke({"input": content})
-        return {"success": True, "analysis": result}
+        # If result contains an 'output' field (typical), use that
+        if isinstance(result, dict) and "output" in result:
+            final_text = result["output"]
+        else:
+            final_text = str(result)
+
+        return {"success": True, "analysis": final_text}
 
     except Exception as e:
         return {"success": False, "error": f"Post analysis failed: {e}"}

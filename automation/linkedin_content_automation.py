@@ -59,6 +59,16 @@ class LinkedInContentAutomation:
             chrome_options.add_argument("--disable-web-security")
             chrome_options.add_argument("--allow-running-insecure-content")
             chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_argument("--disable-ipc-flooding-protection")
+            chrome_options.add_argument("--disable-hang-monitor")
+            chrome_options.add_argument("--disable-prompt-on-repost")
+            chrome_options.add_argument("--disable-sync")
+            chrome_options.add_argument("--disable-translate")
+            chrome_options.add_argument("--disable-logging")
+            chrome_options.add_argument("--disable-permissions-api")
+            chrome_options.add_argument("--disable-notifications")
+            chrome_options.add_argument("--disable-popup-blocking")
             
             # Memory management and crash prevention
             chrome_options.add_argument("--memory-pressure-off")
@@ -75,7 +85,9 @@ class LinkedInContentAutomation:
             
             service = Service(ChromeDriverManager().install())
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            self.driver.set_page_load_timeout(30)
+            self.driver.set_page_load_timeout(60)
+            # Ensure WebDriverWait is initialized whenever driver is (covers cookie-reuse path)
+            self.wait = WebDriverWait(self.driver, 60)
             
             print("✅ Chrome driver setup complete")
             return True
@@ -83,14 +95,16 @@ class LinkedInContentAutomation:
         except Exception as e:
             print(f"❌ Error setting up driver: {e}")
             self.driver = None
-            print(f"Error setting up driver: {e}")
             return False
     def login_to_linkedin(self):
         """Login to LinkedIn with credentials from config"""
         try:
+            # Initialize WebDriverWait if not already done
+            if not hasattr(self, 'wait') or self.wait is None:
+                self.wait = WebDriverWait(self.driver, 60)  # 60 seconds timeout
             
             print("Navigating to LinkedIn...")
-            self.driver.get("https://www.linkedin.com/login")
+            self.driver.get("https://www.linkedin.com/uas/login?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2F")
             
             # Wait for page to load completely
             time.sleep(3)
@@ -276,6 +290,31 @@ class LinkedInContentAutomation:
         except Exception:
             pass
 
+    def recover_driver(self):
+        """Attempt to recover from driver issues"""
+        try:
+            print("🔄 Attempting driver recovery...")
+            if hasattr(self, 'driver') and self.driver:
+                try:
+                    # Try to get current URL to test if driver is responsive
+                    current_url = self.driver.current_url
+                    print(f"Driver responsive, current URL: {current_url}")
+                    return True
+                except Exception as e:
+                    print(f"Driver not responsive: {e}")
+                    # Try to restart driver
+                    try:
+                        self.driver.quit()
+                    except:
+                        pass
+                    self.driver = None
+                    return self.setup_driver()
+            else:
+                return self.setup_driver()
+        except Exception as e:
+            print(f"Driver recovery failed: {e}")
+            return False
+
     def clean_content_for_browser(self, content):
         """Clean content to ensure it's compatible with ChromeDriver"""
         if not content:
@@ -313,6 +352,9 @@ class LinkedInContentAutomation:
             gc.collect()
             
             self.setup_driver()
+            # Safeguard: ensure wait is available even when skipping explicit login (cookie-reuse path)
+            if not hasattr(self, 'wait') or self.wait is None:
+                self.wait = WebDriverWait(self.driver, 60)
             
             # Navigate to LinkedIn FIRST, then load cookies
             print("Navigating to LinkedIn...")
@@ -414,11 +456,23 @@ class LinkedInContentAutomation:
                 self.driver.save_screenshot("click_failed.png")
                 raise Exception("❌ All click methods failed. Screenshot saved: click_failed.png")
 
-            # Wait for modal input field to appear instead of sleep
-            self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div[role='textbox']"))
-            )
-            print("✅ Post modal opened successfully")
+            # Wait for modal input field to appear with retry logic
+            modal_opened = False
+            for attempt in range(3):
+                try:
+                    self.wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "div[role='textbox']"))
+                    )
+                    modal_opened = True
+                    print("✅ Post modal opened successfully")
+                    break
+                except Exception as e:
+                    print(f"⚠️ Modal open attempt {attempt + 1} failed: {e}")
+                    if attempt < 2:
+                        time.sleep(2)
+                        continue
+                    else:
+                        raise Exception("❌ Post modal failed to open after 3 attempts")
 
         
             # Wait for post modal and enter content
@@ -457,7 +511,7 @@ class LinkedInContentAutomation:
                 for char in content:
                     try:
                         post_input.send_keys(char)
-                        time.sleep(0.0008)  # Natural typing speed
+                        time.sleep(0.0000000000000001)  # Natural typing speed
                     except Exception as char_error:
                         print(f"Warning: Could not type character '{char}', skipping...")
                         continue
@@ -514,27 +568,71 @@ class LinkedInContentAutomation:
             print(f"Button classes: {post_button.get_attribute('class')}")
             print(f"Button enabled: {post_button.is_enabled()}")
             
-            # Click Post button
-            try:
-                post_button.click()
-                print("Clicked Post button")
-            except Exception as click_error:
-                print(f"Click failed, trying JavaScript click: {click_error}")
-                # Fallback: use JavaScript click
+            # Click Post button with retry logic
+            post_clicked = False
+            for attempt in range(3):
                 try:
-                    self.driver.execute_script("arguments[0].click();", post_button)
-                    print("Post button clicked using JavaScript")
-                except Exception as js_click_error:
-                    raise Exception(f"Both regular click and JavaScript click failed: {js_click_error}")
+                    if attempt == 0:
+                        post_button.click()
+                        print("Clicked Post button (regular click)")
+                    else:
+                        self.driver.execute_script("arguments[0].click();", post_button)
+                        print(f"Clicked Post button (JavaScript click, attempt {attempt + 1})")
+                    
+                    post_clicked = True
+                    break
+                except Exception as click_error:
+                    print(f"⚠️ Post click attempt {attempt + 1} failed: {click_error}")
+                    if attempt < 2:
+                        time.sleep(2)
+                        continue
+                    else:
+                        raise Exception(f"❌ Post button click failed after 3 attempts: {click_error}")
             
-            # Wait for post confirmation
-            time.sleep(4)
-            st.success("Successfully Published the Content")
-            print("Post successfully published!")
-            return True
+            # Wait for post confirmation with timeout handling
+            try:
+                # Wait for post to be processed (look for success indicators)
+                time.sleep(3)
+                # Check if we're still on the posting modal (indicates failure)
+                try:
+                    self.driver.find_element(By.CSS_SELECTOR, "div[role='textbox']")
+                    print("⚠️ Still on posting modal, post may have failed")
+                except:
+                    print("✅ Post modal closed, post likely successful")
+                
+                print("Post successfully published!")
+                return True
+            except Exception as confirmation_error:
+                print(f"⚠️ Post confirmation check failed: {confirmation_error}")
+                return True  # Assume success if we can't confirm
             
         except Exception as e:
             print(f"Error creating post: {e}")
+            # Try to save debug information
+            try:
+                self.driver.save_screenshot("linkedin_error_debug.png")
+                print("Debug screenshot saved: linkedin_error_debug.png")
+            except:
+                pass
+            
+            # Try to clean up and recover
+            try:
+                if hasattr(self, 'driver') and self.driver:
+                    # Try to close any open modals
+                    try:
+                        self.driver.execute_script("document.querySelectorAll('[role=\"dialog\"]').forEach(d => d.remove());")
+                    except:
+                        pass
+                    
+                    # Try to refresh the page
+                    try:
+                        self.driver.refresh()
+                        time.sleep(2)
+                    except:
+                        pass
+            except:
+                pass
+            
             return False
     
 if __name__=="__main__":

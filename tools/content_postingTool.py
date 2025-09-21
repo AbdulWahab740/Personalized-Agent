@@ -2,7 +2,7 @@ from langchain.tools import tool
 
 # load agents
 from agents.linkedinContentGen import PersonalizedLinkedInContentAgent
-from schemas import CreatePostInput
+from utils.schemas import CreatePostInput
 content_agent = PersonalizedLinkedInContentAgent()
 
 @tool("CreateLinkedInPost", args_schema=CreatePostInput)

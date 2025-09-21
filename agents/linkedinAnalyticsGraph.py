@@ -4,13 +4,9 @@ LangGraph implementation of LinkedIn Analytics workflow
 Provides better state management and clearer workflow visualization
 """
 
-from typing import Dict, Any, List, TypedDict
+from typing import Dict, Any, TypedDict
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage
-from langchain.tools import Tool
 import streamlit as st
-
-from schemas import ProfileAnalysisInput
 from agents.linkedinContentGen import setup_llm
 from tools.post_analyticsTool import get_linkedin_post
 from tools.profile_analyticsTools import (

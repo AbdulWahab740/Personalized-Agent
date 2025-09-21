@@ -7,13 +7,13 @@ import streamlit as st
 from utils.personal_info import PersonalInfo
 from automation.linkedin_content_automation import LinkedInContentAutomation
 from langchain_groq import ChatGroq
-from langchain.prompts import PromptTemplate
+from langchain.prompts import ChatPromptTemplate
 from langchain.docstore.document import Document
 
 from dotenv import load_dotenv
 load_dotenv()
-import json
 import os
+import re
 
 _LLM_INSTANCE = None
 
@@ -27,7 +27,7 @@ def setup_llm():
                 raise ValueError("GROQ_API_KEY not found in environment variables")
             
             _LLM_INSTANCE = ChatGroq(
-                model="llama3-8b-8192",
+                model="deepseek-r1-distill-llama-70b",
                 temperature=0.7,
                 max_tokens=3000,
                 api_key=api_key,
@@ -55,12 +55,11 @@ class PersonalizedLinkedInContentAgent:
     to create personalized, context-aware LinkedIn posts using LLM
     """
     
-    def __init__(self, llm_instance=None):
+    def __init__(self, llm_instance):
         self.personal_agent = PersonalInfo()
-        self.personal_agent._load_profile_from_json()
-        self.personal_profile = self.personal_agent.personal_profile 
+        self.personal_profile = self.personal_agent.personal_profile
         self.linkedin_automation = LinkedInContentAutomation()
-        self.llm = llm_instance if llm_instance else llm
+        self.llm = llm_instance
         
     def _get_concise_personal_context(self, topic: str) -> str:
         """Get a concise personal context for the given topic"""
@@ -158,49 +157,44 @@ class PersonalizedLinkedInContentAgent:
         writing_style = self._truncate_context(writing_style, max_chars=500)
         
         # Define post type specific prompt templates
-        post_template = PromptTemplate(
-                input_variables=["topic", "context_info", "writing_style"],
-                template="""You are a professional LinkedIn content creator. Create an engaging LinkedIn post about {topic}.
+        post_template = ChatPromptTemplate.from_messages([
+    ("system", """You are a professional LinkedIn content creator.
+Your task is to generate a LinkedIn post. 
+⚠️ Do NOT include your own reasoning, thoughts, or step-by-step explanation.
+⚠️ Only output the final LinkedIn post text.
 
-You have to idenify the post_type based on the topic .. it could be either these 
-[acheivements, insights, question, story, general]
+You must STRICTLY follow these rules:
 
-Use this personal context information to make it authentic and personalized:
-{context_info}
-
-Note: You don't need to exagerate or write wrong information. Tell only what I did!
-Writing style guidance: {writing_style} 
-
-Requirements:
+- Only output the LinkedIn post text
+- Never include reasoning, thoughts, or step-by-step explanations
+- Never use <think> or similar markers
 - Start with an engaging hook
-- Never use emoji!!
-- Include specific details from the personal context if it requires
-- Make it inspiring, engaging, shareable and knowledgeful
-- End with a question to encourage engagement
-- Add 3-5 relevant hashtags
+- Never use emoji
 - Keep it under 500 words
-- Use bullet points or short paragraphs for readability
-- Make it sound like a real person sharing their experience with a touch of humor
-- Don't miss to ask the Follow-up or P.S. relevant to the topic (Don't write like : **Follow-up** but can write **P.S.**) just keep it engaging
-- Don't write like `Here's is the linkedin post for you` just start the content about topic
-Generate a compelling LinkedIn post:
-"""
-            ),
+- Use bullet points or short paragraphs
+- Include 3–5 relevant hashtags
+- End with a question to encourage engagement
+- Sound human, engaging, and authentic
+- Add a P.S. if natural to the post
+"""),
+      ("human", """Write a LinkedIn post using:
+- Topic: {topic}
+- Context: {context_info}
+- Writing style: {writing_style}
+
+⚠️ Output only the final LinkedIn post (no extra commentary).""")
+])
         
         try:
             
             chain = post_template | self.llm 
             # Generate content using LLM
-            response = chain.invoke({"topic": topic, "context_info": context_info, "writing_style": writing_style})
-            generated_content = response.content.strip()
-            
-            # Clean up the response if needed
-            if generated_content.startswith("```"):
-                generated_content = generated_content.split("```")[1]
-            if generated_content.endswith("```"):
-                generated_content = generated_content.rsplit("```", 1)[0]
-            print(f"Generated content: {generated_content}")
-            return generated_content
+            result = chain.invoke({"topic": topic, "context_info": context_info, "writing_style": writing_style})
+            # If result contains an 'output' field (typical), use that
+            cleaned_output = re.sub(r"<think>.*?</think>", "", result.content, flags=re.DOTALL).strip()
+            final_text = cleaned_output if hasattr(result, "content") else str(result)
+
+            return {"success": True, "analysis": final_text}
             
         except Exception as e:
             # Check if it's a token limit error
@@ -268,12 +262,26 @@ Generate a compelling LinkedIn post:"""
         try:
             formatted_prompt = general_template.format(topic=topic)
             response = self.llm.invoke(formatted_prompt)
-            generated_content = response.content.strip()
+            
+            # Handle different response types
+            if hasattr(response, 'content'):
+                generated_content = response.content.strip()
+            elif isinstance(response, str):
+                generated_content = response.strip()
+            elif isinstance(response, tuple):
+                # If response is a tuple, take the first element that's a string
+                generated_content = next((item for item in response if isinstance(item, str)), "").strip()
+            else:
+                generated_content = str(response).strip()
+                
+            # Clean up the response
             if generated_content.startswith("```"):
                 generated_content = generated_content.split("```")[1]
             if generated_content.endswith("```"):
                 generated_content = generated_content.rsplit("```", 1)[0]
-            return generated_content
+                
+            return generated_content or "Error: Could not generate content"
+            
         except Exception as e:
             print(f"General template post generation failed: {e}")
             return "Error generating general template post."

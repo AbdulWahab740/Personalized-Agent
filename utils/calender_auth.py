@@ -16,5 +16,3 @@ api_resource = build_resource_service(credentials=credentials)
 toolkit = CalendarToolkit(api_resource=api_resource)
 tools = toolkit.get_tools()
 
-
-print(tools)

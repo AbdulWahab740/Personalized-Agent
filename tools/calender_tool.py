@@ -22,3 +22,6 @@ def calender_event(user_input: str):
         }
     )
     return {"success": True, "message": "Event created successfully"}
+
+if __name__ == "__main__":
+    calender_event("Meeting with John Doe")
